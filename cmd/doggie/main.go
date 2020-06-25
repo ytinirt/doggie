@@ -14,12 +14,12 @@ import (
 )
 
 func main() {
-    etcdEndpoint := flag.String("etcd-endpoint", "", "etcd endpoint(e.g. http[s]://127.0.0.1:2379)")
-    //etcdCACert := flag.String("etcd-ca-cert", "", "etcd server CA cert")
-    //etcdClientCert := flag.String("etcd-client-cert", "", "etcd client cert")
-    //etcdClientKey := flag.String("etcd-client-key", "", "etcd client key")
-    debug := flag.Bool("debug", false, "debug")
-    help := flag.Bool("help", false, "help")
+    etcdEndpoint := flag.String("-etcd-endpoint", "", "etcd endpoint(e.g. http[s]://127.0.0.1:2379)")
+    //etcdCACert := flag.String("-etcd-ca-cert", "", "etcd server CA cert")
+    //etcdClientCert := flag.String("-etcd-client-cert", "", "etcd client cert")
+    //etcdClientKey := flag.String("-etcd-client-key", "", "etcd client key")
+    debug := flag.Bool("-debug", false, "debug")
+    help := flag.Bool("-help", false, "help")
     flag.Parse()
 
     if *help {
