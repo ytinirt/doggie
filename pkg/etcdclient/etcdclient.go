@@ -1,20 +1,20 @@
 package etcdclient
 
 import (
-	"github.com/etcd-io/etcd/clientv3"
 	"github.com/ytinirt/doggie/pkg/util"
+	"github.com/etcd-io/etcd/clientv3"
 	"fmt"
-	etcdclientv3 "github.com/etcd-io/etcd/clientv3"
-	"time"
 	"strings"
+	"github.com/ytinirt/doggie/pkg/log"
+	"time"
+	"context"
 )
 
 type EtcdClient struct {
-	endpoint string
+	ep string
 	caFile string
 	certFile string
 	keyFile string
-	client *clientv3.Client
 }
 
 func endpointValid(ep string) (err error) {
@@ -43,26 +43,50 @@ func New(endpoint, caFile, certFile, keyFile string) (client *EtcdClient, err er
 		}
 	}
 
-	tlsConfig, err := util.GenTLSConfig(endpoint, caFile, certFile, keyFile)
+	client = &EtcdClient{
+		ep: endpoint,
+		caFile: caFile,
+		certFile: certFile,
+		keyFile: keyFile,
+	}
+	return client, nil
+}
+
+func (ec *EtcdClient) serverName() string {
+	str := strings.TrimPrefix(ec.ep, "https://")
+	str = strings.TrimLeft(str, "/")
+	idx := strings.IndexByte(str, ':')
+	str = str[:idx]
+
+	return str
+}
+
+func (ec *EtcdClient) IsLeader() bool {
+	tlsConfig, err := util.GenTLSConfig(ec.serverName(), ec.caFile, ec.certFile, ec.keyFile)
 	if err != nil {
-		return nil, fmt.Errorf("generate TLS config failed, %v", err)
+		log.Error("generate TLS config failed, %v", err)
+		return false
 	}
 
-	cli, err := etcdclientv3.New(etcdclientv3.Config{
-		Endpoints: []string{endpoint},
+	cli, err := clientv3.New(clientv3.Config{
+		Endpoints: []string{ec.ep},
 		DialTimeout: 10 * time.Second,
 		TLS: tlsConfig,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("create Etcd client failed, %v", err)
+		log.Error("create Etcd client failed, %v", err)
+		return false
+	}
+	defer cli.Close()
+
+	resp, err := cli.Status(context.Background(), ec.ep)
+	if err != nil {
+		log.Error("query etcd endpoint status failed, %v", err)
+		return false
 	}
 
-	client = &EtcdClient{
-		endpoint: endpoint,
-		caFile: caFile,
-		certFile: certFile,
-		keyFile: keyFile,
-		client: cli,
-	}
-	return client, nil
+	isLeader := resp.Header.MemberId == resp.Leader
+	log.Debug("endpoint member id %d, leader id %d", resp.Header.MemberId, resp.Leader)
+
+	return isLeader
 }

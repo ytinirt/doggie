@@ -44,3 +44,8 @@ func Fatal(format string, v ...interface{}) {
     log.Output(2, fmt.Sprintf("FTL: " + format, v...))
     os.Exit(1)
 }
+
+func Bug(format string, v ...interface{}) {
+    log.Output(2, fmt.Sprintf("BUG: " + format, v...))
+    os.Exit(1)
+}

@@ -11,13 +11,14 @@ import (
     "time"
     "os/signal"
     "syscall"
+    "github.com/ytinirt/doggie/pkg/etcdclient"
 )
 
 func main() {
     etcdEndpoint := flag.String("etcd-endpoint", "", "etcd endpoint(e.g. https://127.0.0.1:2379)")
-    //etcdCACert := flag.String("etcd-ca-cert", "", "etcd server CA cert")
-    //etcdClientCert := flag.String("etcd-client-cert", "", "etcd client cert")
-    //etcdClientKey := flag.String("etcd-client-key", "", "etcd client key")
+    etcdCACert := flag.String("etcd-ca-cert", "", "etcd server CA cert")
+    etcdClientCert := flag.String("etcd-client-cert", "", "etcd client cert")
+    etcdClientKey := flag.String("etcd-client-key", "", "etcd client key")
     debug := flag.Bool("debug", false, "debug")
     help := flag.Bool("help", false, "help")
     flag.Parse()
@@ -28,14 +29,22 @@ func main() {
         os.Exit(0)
     }
 
-    isEtcdNode := *etcdEndpoint != ""
     log.Init(*debug)
+
+    var ec *etcdclient.EtcdClient = nil
+    if *etcdEndpoint != "" {
+        ec, err := etcdclient.New(*etcdEndpoint, *etcdCACert, *etcdClientCert, *etcdClientKey)
+        if ec == nil || err != nil {
+            log.Fatal("create etcd client failed, %v", err)
+        }
+    }
 
     c := cron.New()
 
+    job.Init(ec)
     jobs := job.GetAllJobs()
     for _, j := range jobs {
-        if j.IsClusterScope() && !isEtcdNode {
+        if j.IsClusterScope() && *etcdEndpoint == "" {
             log.Info("bypass cluster scope %s job on non-etcd node", j.Name())
             continue
         }

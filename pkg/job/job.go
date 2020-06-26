@@ -6,6 +6,7 @@ import (
     "time"
     "github.com/robfig/cron"
     "fmt"
+    "github.com/ytinirt/doggie/pkg/etcdclient"
 )
 
 type Stats struct {
@@ -48,8 +49,12 @@ var (
     jobsMutex sync.Mutex
     jobs = make(map[string]*Job)
 
-    zeroTime = time.Time{}
+    etcdClient *etcdclient.EtcdClient = nil
 )
+
+func Init(ec *etcdclient.EtcdClient) {
+    etcdClient = ec
+}
 
 func RegisterJob(name, scope, schedule string, exec Exec) {
     jobsMutex.Lock()
@@ -120,6 +125,18 @@ func GetAllJobs() (ret []*Job) {
 }
 
 func (j *Job) permitRun() bool {
+    if j.IsClusterScope() {
+        if etcdClient == nil {
+            log.Bug("job %s (cluster scope) is not permitted running, while etcd client is nil", j.Name())
+            return false
+        }
+
+        if !etcdClient.IsLeader() {
+            log.Debug("job %s (cluster scope) is not permitted running, etcd node is not leader now")
+            return false
+        }
+    }
+
     return true
 }
 
@@ -155,6 +172,7 @@ func (j *Job) Run() {
         return
     }
 
+    zeroTime := time.Time{}
     scheduleTime := time.Now()
     j.lock.Lock()
     if j.stats.firstScheduleTime == zeroTime {
