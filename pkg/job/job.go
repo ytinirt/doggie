@@ -127,12 +127,12 @@ func GetAllJobs() (ret []*Job) {
 func (j *Job) permitRun() bool {
     if j.IsClusterScope() {
         if etcdClient == nil {
-            log.Bug("job %s (cluster scope) is not permitted running, while etcd client is nil", j.Name())
+            log.Bug("job %s (cluster scope) is not permitted running, while etcd client is nil", j.name)
             return false
         }
 
         if !etcdClient.IsLeader() {
-            log.Debug("job %s (cluster scope) is not permitted running, etcd node is not leader now")
+            log.Debug("job %s (cluster scope) is not permitted running, etcd node is not leader now", j.name)
             return false
         }
     }

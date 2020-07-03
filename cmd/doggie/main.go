@@ -33,7 +33,8 @@ func main() {
 
     var ec *etcdclient.EtcdClient = nil
     if *etcdEndpoint != "" {
-        ec, err := etcdclient.New(*etcdEndpoint, *etcdCACert, *etcdClientCert, *etcdClientKey)
+        var err error
+        ec, err = etcdclient.New(*etcdEndpoint, *etcdCACert, *etcdClientCert, *etcdClientKey)
         if ec == nil || err != nil {
             log.Fatal("create etcd client failed, %v", err)
         }
