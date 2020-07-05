@@ -11,10 +11,31 @@ import (
     "time"
     "os/signal"
     "syscall"
+    "net/http"
     "github.com/ytinirt/doggie/pkg/etcdclient"
+    "github.com/prometheus/client_golang/prometheus"
+    "github.com/prometheus/client_golang/prometheus/promauto"
+    "github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+var (
+    opsProcessed = promauto.NewCounter(prometheus.CounterOpts{
+        Name: "myapp_processed_ops_total",
+        Help: "The total number of processed events",
+    })
+)
+
+func recordMetrics() {
+    go func() {
+        for {
+            opsProcessed.Inc()
+            time.Sleep(2 * time.Second)
+        }
+    } ()
+}
+
 func main() {
+    recordMetrics()
     etcdEndpoint := flag.String("etcd-endpoint", "", "etcd endpoint(e.g. https://127.0.0.1:2379)")
     etcdCACert := flag.String("etcd-ca-cert", "", "etcd server CA cert")
     etcdClientCert := flag.String("etcd-client-cert", "", "etcd client cert")
@@ -68,6 +89,8 @@ func main() {
     signal.Notify(sigChan, syscall.SIGUSR1, syscall.SIGUSR2)
 
     c.Start()
+    http.Handle("/metrics", promhttp.Handler())
+    go http.ListenAndServe(":2112", nil)
 
     for {
         time.Sleep(time.Hour)

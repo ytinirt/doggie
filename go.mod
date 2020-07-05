@@ -10,6 +10,7 @@ require (
 	github.com/etcd-io/etcd v3.3.22+incompatible
 	github.com/gogo/protobuf v1.3.1 // indirect
 	github.com/google/uuid v1.1.1 // indirect
+	github.com/prometheus/client_golang v1.7.1
 	github.com/robfig/cron v1.2.0
 	go.uber.org/zap v1.15.0 // indirect
 	google.golang.org/grpc v1.26.0 // indirect
