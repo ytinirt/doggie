@@ -7,13 +7,15 @@ import (
     "github.com/robfig/cron"
     "fmt"
     "github.com/ytinirt/doggie/pkg/etcdclient"
+    "github.com/prometheus/client_golang/prometheus"
+    "github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 type Stats struct {
-    scheduleCount uint
-    postponeCount uint
-    failCount uint
-    successCount uint
+    scheduleCounter prometheus.Counter
+    postponeCounter prometheus.Counter
+    failCounter prometheus.Counter
+    successCounter prometheus.Counter
 
     firstScheduleTime time.Time
     lastScheduleTime time.Time
@@ -40,9 +42,9 @@ type Job struct {
 const (
     ClusterScope = "cluster"
     NodeScope = "node"
-    jobStrBannerFormatMeta = "%%-%ds Scope   %%-%ds SchCnt PCnt FCnt SucCnt FirstSchedTime  LastSchedTime   LastFailTime    LastSuccTime    LongestDurTime  LongestDur"
-    jobStrFormatMeta = "%%-%ds %%-7s %%-%ds %%-6d %%-4d %%-4d %%-6d %%-15s %%-15s %%-15s %%-15s %%-15s %%s"
-    jobStrFormat = "name(%s) scope(%s) sched(%s) schCnt(%d) pCnt(%d) fCnt(%d) sucCnt(%d) firstSchedTime(%s) lastSchedTime(%s) lastFailTime(%s) lastSuccTime(%s) longestDurTime(%s) longestDur(%s)"
+    jobStrBannerFormatMeta = "%%-%ds Scope   %%-%ds FirstSchedTime  LastSchedTime   LastFailTime    LastSuccTime    LongestDurTime  LongestDur"
+    jobStrFormatMeta = "%%-%ds %%-7s %%-%ds %%-15s %%-15s %%-15s %%-15s %%-15s %%s"
+    jobStrFormat = "name(%s) scope(%s) sched(%s) firstSchedTime(%s) lastSchedTime(%s) lastFailTime(%s) lastSuccTime(%s) longestDurTime(%s) longestDur(%s)"
 )
 
 var (
@@ -54,6 +56,39 @@ var (
 
 func Init(ec *etcdclient.EtcdClient) {
     etcdClient = ec
+}
+
+func initJobStats(j *Job) {
+    labels := prometheus.Labels{"job": j.name, "scope": j.scope}
+
+    j.stats.scheduleCounter = promauto.NewCounter(prometheus.CounterOpts{
+        Name: "doggie_job_scheduled_total",
+        Help: "The total scheduled number of job",
+        ConstLabels: labels,
+    })
+    j.stats.postponeCounter = promauto.NewCounter(prometheus.CounterOpts{
+        Name: "doggie_job_postponed_total",
+        Help: "The total postponed number of job",
+        ConstLabels: labels,
+    })
+    j.stats.failCounter = promauto.NewCounter(prometheus.CounterOpts{
+        Name: "doggie_job_failed_total",
+        Help: "The total failed number of job",
+        ConstLabels: labels,
+    })
+    j.stats.successCounter = promauto.NewCounter(prometheus.CounterOpts{
+        Name: "doggie_job_success_total",
+        Help: "The total success number of job",
+        ConstLabels: labels,
+    })
+
+    j.stats.firstScheduleTime = time.Time{}
+    j.stats.lastScheduleTime = time.Time{}
+    j.stats.lastFailTime = time.Time{}
+    j.stats.lastSuccessTime = time.Time{}
+
+    j.stats.longestDuration = 0
+    j.stats.longestDurationTime = time.Time{}
 }
 
 func RegisterJob(name, scope, schedule string, exec Exec) {
@@ -79,8 +114,8 @@ func RegisterJob(name, scope, schedule string, exec Exec) {
 
         lock: sync.Mutex{},
         running: false,
-        stats: Stats{},
     }
+    initJobStats(jobs[name])
 }
 
 func DumpAllJobs() {
@@ -104,7 +139,6 @@ func DumpAllJobs() {
     // FIXME: 此处未进行锁保护，读取的数据可能不一致
     for _, j := range jobs {
         out := fmt.Sprintf(jobFormat, j.name, j.scope, j.schedule,
-            j.stats.scheduleCount, j.stats.postponeCount, j.stats.failCount, j.stats.successCount,
             j.stats.firstScheduleTime.Format(time.Stamp),
             j.stats.lastScheduleTime.Format(time.Stamp),
             j.stats.lastFailTime.Format(time.Stamp),
@@ -156,7 +190,6 @@ func (j *Job) String() string {
     // FIXME: 此处未进行锁保护，读取的数据可能不一致
 
     return fmt.Sprintf(jobStrFormat, j.name, j.scope, j.schedule,
-        j.stats.scheduleCount, j.stats.postponeCount, j.stats.failCount, j.stats.successCount,
         j.stats.firstScheduleTime.Format(time.RFC3339),
         j.stats.lastScheduleTime.Format(time.RFC3339),
         j.stats.lastFailTime.Format(time.RFC3339),
@@ -179,9 +212,9 @@ func (j *Job) Run() {
         j.stats.firstScheduleTime = scheduleTime
     }
     j.stats.lastScheduleTime = scheduleTime
-    j.stats.scheduleCount++
+    j.stats.scheduleCounter.Inc()
     if j.running {
-        j.stats.postponeCount++
+        j.stats.postponeCounter.Inc()
         j.lock.Unlock()
         log.Warn("job %s is running, postponed", j.name)
         return
@@ -200,11 +233,11 @@ func (j *Job) Run() {
         j.stats.longestDurationTime = end
     }
     if err == nil {
-        j.stats.successCount++
+        j.stats.successCounter.Inc()
         j.stats.lastSuccessTime = end
         log.Info("%s job finished", j.name)
     } else {
-        j.stats.failCount++
+        j.stats.failCounter.Inc()
         j.stats.lastFailTime = end
         log.Info("%s job return error: %v", j.name, err)
     }

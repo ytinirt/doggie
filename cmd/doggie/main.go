@@ -3,39 +3,21 @@ package main
 import (
     "flag"
     "fmt"
-    "github.com/robfig/cron"
-    "github.com/ytinirt/doggie/pkg/job"
-    _ "github.com/ytinirt/doggie/pkg/job/jobs"
-    "github.com/ytinirt/doggie/pkg/log"
     "os"
     "time"
     "os/signal"
     "syscall"
     "net/http"
+
+    "github.com/robfig/cron"
+    "github.com/ytinirt/doggie/pkg/job"
+    _ "github.com/ytinirt/doggie/pkg/job/jobs"
+    "github.com/ytinirt/doggie/pkg/log"
     "github.com/ytinirt/doggie/pkg/etcdclient"
-    "github.com/prometheus/client_golang/prometheus"
-    "github.com/prometheus/client_golang/prometheus/promauto"
     "github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-var (
-    opsProcessed = promauto.NewCounter(prometheus.CounterOpts{
-        Name: "myapp_processed_ops_total",
-        Help: "The total number of processed events",
-    })
-)
-
-func recordMetrics() {
-    go func() {
-        for {
-            opsProcessed.Inc()
-            time.Sleep(2 * time.Second)
-        }
-    } ()
-}
-
 func main() {
-    recordMetrics()
     etcdEndpoint := flag.String("etcd-endpoint", "", "etcd endpoint(e.g. https://127.0.0.1:2379)")
     etcdCACert := flag.String("etcd-ca-cert", "", "etcd server CA cert")
     etcdClientCert := flag.String("etcd-client-cert", "", "etcd client cert")
