@@ -22,7 +22,7 @@ func init() {
 			log.Info("demo-node-scope job failed")
 			return fmt.Errorf("demo-node-scope job failed")
 		}
-	})
+	}, job.Opts{})
 
 	job.RegisterJob("demo-cluster-scope", job.ClusterScope, "*/23 * * * *", func() (error) {
 		log.Info("demo-cluster-scope job start")
@@ -37,5 +37,5 @@ func init() {
 			log.Info("demo-cluster-scope job failed")
 			return fmt.Errorf("demo-cluster-scope job failed")
 		}
-	})
+	}, job.Opts{})
 }

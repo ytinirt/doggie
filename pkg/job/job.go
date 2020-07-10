@@ -16,6 +16,7 @@ type Stats struct {
     postponeCounter prometheus.Counter
     failCounter prometheus.Counter
     successCounter prometheus.Counter
+    duration prometheus.Histogram
 
     firstScheduleTime time.Time
     lastScheduleTime time.Time
@@ -28,11 +29,19 @@ type Stats struct {
 
 type Exec func() error
 
+type Opts struct {
+    durationStart float64 // secs
+    durationFactor float64
+    durationCount int
+}
+
 type Job struct {
     name string
     scope string
     schedule string // "*/ * * * *"
     exec Exec
+
+    opts Opts
 
     lock sync.Mutex
     running bool
@@ -45,6 +54,9 @@ const (
     jobStrBannerFormatMeta = "%%-%ds Scope   %%-%ds FirstSchedTime  LastSchedTime   LastFailTime    LastSuccTime    LongestDurTime  LongestDur"
     jobStrFormatMeta = "%%-%ds %%-7s %%-%ds %%-15s %%-15s %%-15s %%-15s %%-15s %%s"
     jobStrFormat = "name(%s) scope(%s) sched(%s) firstSchedTime(%s) lastSchedTime(%s) lastFailTime(%s) lastSuccTime(%s) longestDurTime(%s) longestDur(%s)"
+    defaultDurationStart = 0.1 // secs
+    defaultDurationFactor = 2
+    defaultDurationCount = 8
 )
 
 var (
@@ -81,6 +93,12 @@ func initJobStats(j *Job) {
         Help: "The total success number of job",
         ConstLabels: labels,
     })
+    j.stats.duration = promauto.NewHistogram(prometheus.HistogramOpts{
+        Name: "doggie_job_execution_duration",
+        Help: "The duration of job execution",
+        ConstLabels: labels,
+        Buckets: prometheus.ExponentialBuckets(j.opts.durationStart, j.opts.durationFactor, j.opts.durationCount),
+    })
 
     j.stats.firstScheduleTime = time.Time{}
     j.stats.lastScheduleTime = time.Time{}
@@ -91,7 +109,7 @@ func initJobStats(j *Job) {
     j.stats.longestDurationTime = time.Time{}
 }
 
-func RegisterJob(name, scope, schedule string, exec Exec) {
+func RegisterJob(name, scope, schedule string, exec Exec, opts Opts) {
     jobsMutex.Lock()
     defer jobsMutex.Unlock()
 
@@ -105,12 +123,27 @@ func RegisterJob(name, scope, schedule string, exec Exec) {
         log.Fatal("Job %s invalid schedule %s, %v", name, schedule, err)
     }
 
+    if opts.durationStart == 0 {
+        opts.durationStart = defaultDurationStart
+        log.Debug("using default duration start %f for job %s", defaultDurationStart, name)
+    }
+    if opts.durationFactor == 0 {
+        opts.durationFactor = defaultDurationFactor
+        log.Debug("using default duration factor %f for job %s", defaultDurationFactor, name)
+    }
+    if opts.durationCount == 0 {
+        opts.durationCount = defaultDurationCount
+        log.Debug("using default duration count %d for job %s", defaultDurationCount, name)
+    }
+
     log.Info("Registered job %s", name)
     jobs[name] = &Job {
         name: name,
         scope: scope,
         schedule: schedule,
         exec: exec,
+
+        opts: opts,
 
         lock: sync.Mutex{},
         running: false,
@@ -200,8 +233,10 @@ func (j *Job) String() string {
 }
 
 func (j *Job) Run() {
+    log.Debug("scheduled running job: %s", j.name)
+
     if !j.permitRun() {
-        log.Info("job not permit running: %s", j.name)
+        log.Info("not permitted running job: %s", j.name)
         return
     }
 
@@ -210,20 +245,21 @@ func (j *Job) Run() {
     j.lock.Lock()
     if j.stats.firstScheduleTime == zeroTime {
         j.stats.firstScheduleTime = scheduleTime
+        log.Debug("first scheduled job: %s @ %v", j.name, scheduleTime)
     }
     j.stats.lastScheduleTime = scheduleTime
     j.stats.scheduleCounter.Inc()
     if j.running {
         j.stats.postponeCounter.Inc()
         j.lock.Unlock()
-        log.Warn("job %s is running, postponed", j.name)
+        log.Warn("another is running, postponed job: %s", j.name)
         return
     }
 
     j.running = true
     j.lock.Unlock()
 
-    log.Info("%s job start run", j.name)
+    log.Info("start running job: %s", j.name)
     start := time.Now()
     err := j.exec()
     end := time.Now()
@@ -235,12 +271,14 @@ func (j *Job) Run() {
     if err == nil {
         j.stats.successCounter.Inc()
         j.stats.lastSuccessTime = end
-        log.Info("%s job finished", j.name)
+        log.Info("finished job: %s", j.name)
     } else {
         j.stats.failCounter.Inc()
         j.stats.lastFailTime = end
-        log.Info("%s job return error: %v", j.name, err)
+        log.Info("failed job: %s, return error %v", j.name, err)
     }
+
+    j.stats.duration.Observe(float64(duration / time.Second))
 
     j.lock.Lock()
     j.running = false
