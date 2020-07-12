@@ -14,6 +14,7 @@ require (
 	github.com/robfig/cron v1.2.0
 	go.uber.org/zap v1.15.0 // indirect
 	google.golang.org/grpc v1.26.0 // indirect
+	gopkg.in/yaml.v2 v2.2.5
 )
 
 replace github.com/coreos/go-systemd => github.com/coreos/go-systemd/v22 v22.1.0
