@@ -6,6 +6,7 @@ import (
     "time"
     "github.com/robfig/cron"
     "fmt"
+    "path/filepath"
     "github.com/ytinirt/doggie/pkg/etcdclient"
     "github.com/prometheus/client_golang/prometheus"
     "github.com/prometheus/client_golang/prometheus/promauto"
@@ -27,7 +28,7 @@ type Stats struct {
     longestDurationTime time.Time
 }
 
-type Exec func() error
+type Exec func(confFile *string) error
 
 type Opts struct {
     durationStart float64 // secs
@@ -41,6 +42,7 @@ type Job struct {
     schedule string // "*/ * * * *"
     exec Exec
 
+    confFile string
     opts Opts
 
     lock sync.Mutex
@@ -54,19 +56,22 @@ const (
     jobStrBannerFormatMeta = "%%-%ds Scope   %%-%ds FirstSchedTime  LastSchedTime   LastFailTime    LastSuccTime    LongestDurTime  LongestDur"
     jobStrFormatMeta = "%%-%ds %%-7s %%-%ds %%-15s %%-15s %%-15s %%-15s %%-15s %%s"
     jobStrFormat = "name(%s) scope(%s) sched(%s) firstSchedTime(%s) lastSchedTime(%s) lastFailTime(%s) lastSuccTime(%s) longestDurTime(%s) longestDur(%s)"
-    defaultDurationStart = 0.1 // secs
-    defaultDurationFactor = 2
+    defaultDurationStart = 0.01 // secs
+    defaultDurationFactor = 10
     defaultDurationCount = 8
+    confFileSuffix = ".conf"
 )
 
 var (
     jobsMutex sync.Mutex
     jobs = make(map[string]*Job)
 
+    confFileDir = ""
     etcdClient *etcdclient.EtcdClient = nil
 )
 
-func Init(ec *etcdclient.EtcdClient) {
+func Init(path *string, ec *etcdclient.EtcdClient) {
+    confFileDir = *path
     etcdClient = ec
 }
 
@@ -143,6 +148,7 @@ func RegisterJob(name, scope, schedule string, exec Exec, opts Opts) {
         schedule: schedule,
         exec: exec,
 
+        confFile: filepath.Join(confFileDir, name, confFileSuffix),
         opts: opts,
 
         lock: sync.Mutex{},
@@ -261,7 +267,7 @@ func (j *Job) Run() {
 
     log.Info("start running job: %s", j.name)
     start := time.Now()
-    err := j.exec()
+    err := j.exec(&j.confFile)
     end := time.Now()
     duration := end.Sub(start)
     if duration > j.stats.longestDuration {
