@@ -26,13 +26,16 @@ const (
 func init() {
 	job.RegisterJob("demo-node-scope", job.NodeScope, "*/10 * * * *", func(confFile *string) (error) {
 		conf := Conf{MaxDelaySecs: 0, SuccessPercent: 0}
-		yamlConf, err := ioutil.ReadFile(*confFile)
-		if err == nil {
-			err := yaml.Unmarshal(yamlConf, &conf)
-			if err != nil {
-				log.Error("Unmarshal configuration file failed: %s, %v", *confFile, err)
+		if *confFile != "" {
+			yamlConf, err := ioutil.ReadFile(*confFile)
+			if err == nil {
+				err := yaml.Unmarshal(yamlConf, &conf)
+				if err != nil {
+					log.Error("Unmarshal configuration file failed: %s, %v", *confFile, err)
+				}
 			}
 		}
+
 		if conf.MaxDelaySecs == 0 {
 			conf.MaxDelaySecs = defaultDemoNodeScopeMaxDelay
 			log.Debug("demo-node-scope using default maxDelaySecs: %d", conf.MaxDelaySecs)
@@ -57,13 +60,16 @@ func init() {
 
 	job.RegisterJob("demo-cluster-scope", job.ClusterScope, "*/23 * * * *", func(confFile *string) (error) {
 		conf := Conf{MaxDelaySecs: 0, SuccessPercent: 0}
-		yamlConf, err := ioutil.ReadFile(*confFile)
-		if err == nil {
-			err := yaml.Unmarshal(yamlConf, &conf)
-			if err != nil {
-				log.Error("Unmarshal configuration file failed: %s, %v", *confFile, err)
+		if *confFile != "" {
+			yamlConf, err := ioutil.ReadFile(*confFile)
+			if err == nil {
+				err := yaml.Unmarshal(yamlConf, &conf)
+				if err != nil {
+					log.Error("Unmarshal configuration file failed: %s, %v", *confFile, err)
+				}
 			}
 		}
+
 		if conf.MaxDelaySecs == 0 {
 			conf.MaxDelaySecs = defaultDemoClusterScopeMaxDelay
 			log.Debug("demo-cluster-scope using default maxDelaySecs: %d", conf.MaxDelaySecs)

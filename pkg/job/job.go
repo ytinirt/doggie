@@ -148,7 +148,7 @@ func RegisterJob(name, scope, schedule string, exec Exec, opts Opts) {
         schedule: schedule,
         exec: exec,
 
-        confFile: filepath.Join(confFileDir, name, confFileSuffix),
+        confFile: "",
         opts: opts,
 
         lock: sync.Mutex{},
@@ -267,6 +267,11 @@ func (j *Job) Run() {
 
     log.Info("start running job: %s", j.name)
     start := time.Now()
+    if j.confFile == "" && confFileDir != "" {
+        // 只有在init()阶段之后，初始化confFileDir后，才能为job.confFile赋值
+        // 否则confFileDir还未被初始化
+        j.confFile = filepath.Join(confFileDir, j.name + confFileSuffix)
+    }
     err := j.exec(&j.confFile)
     end := time.Now()
     duration := end.Sub(start)
